@@ -1,0 +1,6 @@
+from oauth2client import GOOGLE_TOKEN_URI
+
+
+GOOGLE_API_KEY = ""
+GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_SECRET = ""
