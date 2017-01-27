@@ -16,5 +16,12 @@ def empty_worksheet():
 
 
 @pytest.fixture(scope="function")
+def dummy_worksheet():
+    """Worksheet without mandatory columns"""
+    records = [{'test1': 666}, {'test2': 777}]
+    return MockWorksheet(records=records)
+
+
+@pytest.fixture(scope="function")
 def worksheet_with_avg():
     return MockWorksheet()

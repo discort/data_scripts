@@ -1,20 +1,19 @@
+import os
 import argparse
 import logging
 
 import gspread
 import pandas as pd
-import numpy as np
 from oauth2client.service_account import ServiceAccountCredentials
 
-from config import SERVICE_CREDENTIALS, WINDOW_SIZE
+from config import (SERVICE_CREDENTIALS, WINDOW_SIZE, WINDOW_TYPE, HEADER_ROW_NUMBER,
+                    LOG_TO, LOGGER)
 
 
 logger = logging.getLogger(__name__)
 
-# Allows read/write access to the user's sheets and their properties.
-# SCOPES = 'https://www.googleapis.com/auth/spreadsheets'
-
-SCOPE = ['https://spreadsheets.google.com/feeds']
+# For acquiring an access token
+SCOPES = ['https://spreadsheets.google.com/feeds']
 
 
 class WorksheetError(Exception):
@@ -22,7 +21,19 @@ class WorksheetError(Exception):
     pass
 
 
-def parse_options():
+def configure_logging(logger):
+    if not os.path.exists(LOG_TO):
+        os.mkdir(LOG_TO)
+
+    file_handler = logging.FileHandler(os.path.join(LOG_TO, LOGGER['file']))
+    file_handler.setLevel(LOGGER['level'])
+    file_handler.setFormatter(LOGGER['formatter'])
+
+    logger.addHandler(file_handler)
+    logger.setLevel(file_handler.level)
+
+
+def parse_args():
     parser = argparse.ArgumentParser(description="Process Google Sheet ID")
     parser.add_argument('sheet_id', help="Google Sheet ID")
     return parser.parse_args()
@@ -40,7 +51,7 @@ def open_spreadsheet(key):
     """
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(
         SERVICE_CREDENTIALS,
-        SCOPE,
+        SCOPES,
     )
     client = gspread.authorize(credentials)
     spreadsheet = client.open_by_key(key)
@@ -62,7 +73,7 @@ def process_spreadsheet(spreadsheet):
 def process_worksheet(sheet):
     """
     Calculate the moving average of daily visitors and write it column `Moving Average`.
-    If the column does not exist it creates the column.
+    If the column does not exist creating the column.
 
     Args:
         sheet: `gspread.Worksheet` - The class for worksheet object
@@ -70,11 +81,10 @@ def process_worksheet(sheet):
     Returns:
         None
     """
-    df = pd.DataFrame(sheet.get_all_records())
+    records = sheet.get_all_records()
+    df = pd.DataFrame(records)
     if df.empty:
         raise WorksheetError("Empty worksheet: `{0}`".format(sheet.title))
-
-    print(df)
 
     # Check worksheet for mandatory columns
     mandatory_columns = ('Date', 'Visitors')
@@ -86,19 +96,77 @@ def process_worksheet(sheet):
     # To prevent for MA calculation from scratch
     df['Visitors'] = df['Visitors'].fillna(0)
 
-    df['Moving Average'] = df['Visitors'].rolling(window=WINDOW_SIZE).mean()
+    df['Moving Average'] = df['Visitors'].rolling(window=WINDOW_SIZE,
+                                                  win_type=WINDOW_TYPE).mean()
 
-    df['Visitors'] = df['Visitors'].astype(int)
+    averages = df['Moving Average'].fillna('').tolist()
+    cells_range = _get_ma_cells_range(sheet, records)
 
-    print(df)
+    for cell, mean in zip(cells_range, averages):
+        cell.value = mean
+
+    # Update in batch
+    sheet.update_cells(cells_range)
+
+
+def _get_ma_cells_range(sheet, records):
+    """
+    Get a list of cells for `Moving Average` values
+
+    Args:
+        sheet:`gspread.Worksheet` - The class for worksheet object
+        records:list - The list of dicts of existins records
+
+    Returns:
+        a list of `gspread.Cell` instances
+    """
+    MA_cell = _get_or_create_ma_cell(sheet, records)
+    start_ma_cell = gspread.utils.rowcol_to_a1(MA_cell.row + 1, MA_cell.col)
+
+    date_cell = sheet.find('Date')
+    date_values = sheet.col_values(date_cell.col)
+    date_values = list(filter(None, date_values))  # Remove empty strings
+
+    end_ma_cell = gspread.utils.rowcol_to_a1(len(date_values), MA_cell.col)
+
+    cell_list = sheet.range("{start}:{end}".format(start=start_ma_cell, end=end_ma_cell))
+    return cell_list
+
+
+def _get_or_create_ma_cell(sheet, records, default_label='Moving Average'):
+    """
+    Create or get `Moving Average` header cell
+
+    Args:
+        sheet:`gspread.Worksheet` - The class for worksheet object
+        records:list - The list of dicts of existins records
+        default_label:str - `Moving Average` header label
+
+    Returns:
+        `gspread.Cell` instance - MA header cell
+    """
+    try:
+        MA_cell = sheet.find(default_label)
+    except gspread.exceptions.CellNotFound:
+        last_column_idx = len(records[0]) + 1
+        sheet.update_cell(HEADER_ROW_NUMBER, last_column_idx, default_label)
+        MA_cell = sheet.cell(HEADER_ROW_NUMBER, last_column_idx)
+    return MA_cell
 
 
 def main():
-    options = parse_options()
-    print(options)
-    spreadsheet = open_spreadsheet(options.sheet_id)
-    print(spreadsheet)
-    process_spreadsheet(spreadsheet)
+    configure_logging(logger)
+    logger.info("Service is running...")
+    try:
+        args = parse_args()
+        logger.info("parsed args: {0}".format(args))
+        spreadsheet = open_spreadsheet(args.sheet_id)
+        logger.info("Spreadsheet with id={0} opening".format(spreadsheet.id))
+        process_spreadsheet(spreadsheet)
+        logger.info("Processing completed")
+    except Exception:
+        logger.exception("Error ocurred during processing Sheet:{0}".format(args.sheet_id))
+
     # spreadsheet_id = "1RMgVoyTdIaQ6k4WNIzWw74pUSf-wBTkq2Xa5jwIGbS4"
     # spreadsheet_id2 = "1YZbtdIKOIlpyib8oncLW9jbVbFvde07-GaxT3CSHkDI"
 
