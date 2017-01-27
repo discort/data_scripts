@@ -3,9 +3,10 @@ import logging
 
 import gspread
 import pandas as pd
+import numpy as np
 from oauth2client.service_account import ServiceAccountCredentials
 
-from config import SERVICE_CREDENTIALS
+from config import SERVICE_CREDENTIALS, WINDOW_SIZE
 
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,17 @@ def process_worksheet(sheet):
     mandatory_columns = ('Date', 'Visitors')
     for col in mandatory_columns:
         if col not in df.columns:
-            raise WorksheetError("Worksheet `{0}` does not contain mandatory column `{1}`".format(sheet.title, col))
+            raise WorksheetError("Worksheet `{0}` does not contain mandatory column `{1}`"
+                                 .format(sheet.title, col))
+
+    # To prevent for MA calculation from scratch
+    df['Visitors'] = df['Visitors'].fillna(0)
+
+    df['Moving Average'] = df['Visitors'].rolling(window=WINDOW_SIZE).mean()
+
+    df['Visitors'] = df['Visitors'].astype(int)
+
+    print(df)
 
 
 def main():
@@ -89,6 +100,7 @@ def main():
     print(spreadsheet)
     process_spreadsheet(spreadsheet)
     # spreadsheet_id = "1RMgVoyTdIaQ6k4WNIzWw74pUSf-wBTkq2Xa5jwIGbS4"
+    # spreadsheet_id2 = "1YZbtdIKOIlpyib8oncLW9jbVbFvde07-GaxT3CSHkDI"
 
 
 if __name__ == "__main__":
