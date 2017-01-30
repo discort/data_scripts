@@ -182,9 +182,6 @@ def main():
     except Exception:
         logger.exception("Error ocurred during processing Sheet:{0}".format(args.sheet_id))
 
-    # spreadsheet_id = "1RMgVoyTdIaQ6k4WNIzWw74pUSf-wBTkq2Xa5jwIGbS4"
-    # spreadsheet_id2 = "1YZbtdIKOIlpyib8oncLW9jbVbFvde07-GaxT3CSHkDI"
-
 
 if __name__ == "__main__":
     main()
