@@ -13,7 +13,7 @@ SERVICE_CREDENTIALS = {
     "type": "service_account",
     "project_id": "testing-156809",
     "private_key_id": "16c7eb2a02aea5306beab5352c6ea92841c44c7b",
-    "private_key": os.environ.get('PRIVATE_KEY'),
+    "private_key": os.environ.get('PRIVATE KEY'),
     "client_email": "611098765609-compute@developer.gserviceaccount.com",
     "client_id": "107444024930240932124",
     "auth_uri": "https://accounts.google.com/o/oauth2/auth",

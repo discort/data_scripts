@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import logging
 
@@ -33,26 +34,28 @@ def configure_logging(logger):
     logger.setLevel(file_handler.level)
 
 
-def parse_args():
+def parse_args(args):
     parser = argparse.ArgumentParser(description="Process Google Sheet ID")
     parser.add_argument('sheet_id', help="Google Sheet ID")
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
-def open_spreadsheet(key):
+def open_spreadsheet(key, credentials=None):
     """
     Open spreadsheet specified by key
 
     Args:
         key:str - A key of a spreadsheet as it appears in a URL in a browser.
+        credentials:`oath2client.OAuth2Credentials` - client credentials
 
     Returns:
         `gspread.Spreadsheet` instance.
     """
-    credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-        SERVICE_CREDENTIALS,
-        SCOPES,
-    )
+    if not credentials:
+        credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+            SERVICE_CREDENTIALS,
+            SCOPES,
+        )
     client = gspread.authorize(credentials)
     spreadsheet = client.open_by_key(key)
     return spreadsheet
@@ -81,17 +84,38 @@ def process_worksheet(sheet):
     Returns:
         None
     """
-    records = sheet.get_all_records()
+    records = sheet.get_all_records(head=HEADER_ROW_NUMBER)
+    moving_average = calculate_moving_average(records, sheet.title)
+    cells_range = get_result_cells_range(sheet, records)
+
+    for cell, mean in zip(cells_range, moving_average):
+        cell.value = mean
+
+    # Update in batch
+    sheet.update_cells(cells_range)
+
+
+def calculate_moving_average(records, title):
+    """
+    Calculate moving average of daily visitors on the Google Worksheet
+
+    Args:
+        records:list - A list of dictionaries
+        title:str - The title of the worksheet
+
+    Returns:
+        List of caculated values values
+    """
     df = pd.DataFrame(records)
     if df.empty:
-        raise WorksheetError("Empty worksheet: `{0}`".format(sheet.title))
+        raise WorksheetError("Empty worksheet: `{0}`".format(title))
 
     # Check worksheet for mandatory columns
     mandatory_columns = ('Date', 'Visitors')
     for col in mandatory_columns:
         if col not in df.columns:
             raise WorksheetError("Worksheet `{0}` does not contain mandatory column `{1}`"
-                                 .format(sheet.title, col))
+                                 .format(title, col))
 
     # To prevent for MA calculation from scratch
     df['Visitors'] = df['Visitors'].fillna(0)
@@ -99,17 +123,11 @@ def process_worksheet(sheet):
     df['Moving Average'] = df['Visitors'].rolling(window=WINDOW_SIZE,
                                                   win_type=WINDOW_TYPE).mean()
 
-    averages = df['Moving Average'].fillna('').tolist()
-    cells_range = _get_ma_cells_range(sheet, records)
-
-    for cell, mean in zip(cells_range, averages):
-        cell.value = mean
-
-    # Update in batch
-    sheet.update_cells(cells_range)
+    values = df['Moving Average'].fillna('').tolist()
+    return values
 
 
-def _get_ma_cells_range(sheet, records):
+def get_result_cells_range(sheet, records):
     """
     Get a list of cells for `Moving Average` values
 
@@ -120,7 +138,7 @@ def _get_ma_cells_range(sheet, records):
     Returns:
         a list of `gspread.Cell` instances
     """
-    MA_cell = _get_or_create_ma_cell(sheet, records)
+    MA_cell = get_or_create_ma_cell(sheet, records)
     start_ma_cell = gspread.utils.rowcol_to_a1(MA_cell.row + 1, MA_cell.col)
 
     date_cell = sheet.find('Date')
@@ -133,7 +151,7 @@ def _get_ma_cells_range(sheet, records):
     return cell_list
 
 
-def _get_or_create_ma_cell(sheet, records, default_label='Moving Average'):
+def get_or_create_ma_cell(sheet, records, default_label='Moving Average'):
     """
     Create or get `Moving Average` header cell
 
@@ -158,10 +176,11 @@ def main():
     configure_logging(logger)
     logger.info("Service is running...")
     try:
-        args = parse_args()
+        args = parse_args(sys.argv[1:])
         logger.info("parsed args: {0}".format(args))
         spreadsheet = open_spreadsheet(args.sheet_id)
-        logger.info("Spreadsheet with id={0} opening".format(spreadsheet.id))
+        logger.info("Spreadsheet with id={0} is opening".format(spreadsheet.id))
+
         process_spreadsheet(spreadsheet)
         logger.info("Processing completed")
     except Exception:
