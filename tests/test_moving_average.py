@@ -1,13 +1,14 @@
-import sys
-
-import gspread
 import json
 import pytest
-from unittest import mock
 from pytest_mock import mocker
 
-from moving_average import (parse_args, open_spreadsheet, process_worksheet, WorksheetError,
-                            calculate_moving_average, process_spreadsheet, get_result_cells_range)
+from moving_average import (parse_args, process_worksheet, WorksheetError,
+                            calculate_moving_average, get_or_create_ma_cell)
+
+
+class Struct:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
 
 
 def load_fixture(fixture_name):
@@ -52,7 +53,17 @@ def test_moving_average(source_data, expected):
     assert result == expected
 
 
-def test_get_result_cells_range(worksheet, mocker):
+def test_get_or_create_ma_cell(worksheet, mocker):
     records = load_fixture('consistent_dates.json')
 
-    get_result_cells_range(worksheet, records)
+    # Test if 'Moving Average' column does not exist
+    mocker.patch.object(worksheet, 'update_cell')
+    worksheet.update_cell.return_value = None
+    get_or_create_ma_cell(worksheet, records)
+    worksheet.update_cell.assert_called_with(1, 5, 'Moving Average')
+
+    # Test if 'Moving Average' column does exists
+    mocker.patch.object(worksheet, 'find')
+    worksheet.find.return_value = Struct(row=2, col=5)
+    get_or_create_ma_cell(worksheet, records)
+    worksheet.find.assert_called_with('Moving Average')

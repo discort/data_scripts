@@ -1,8 +1,8 @@
 ## Basic usage
 1. Obtain OAuth2 credentials from [Google Developers Console](https://console.developers.google.com/project)
-  1. Create a new project (or select the one you have).
-  2. Under “API & auth”, in the API enable “Drive API”.
-  3. Go to “Credentials” and choose “New Credentials > Service Account Key”.
+  * Create a new project (or select the one you have).
+  * Under “API & auth”, in the API enable “Drive API”.
+  * Go to “Credentials” and choose “New Credentials > Service Account Key”.
   You will automatically download a JSON file with this data.
   This is how this file may look like:
   ```
@@ -14,11 +14,11 @@
     "type": "service_account"
   }
   ```
-  4. Go to Google Sheets and share your spreadsheet with an email you have in your `json_key['client_email']`. Otherwise you’ll get a `SpreadsheetNotFound` exception when trying to open it.
+  * Go to Google Sheets and share your spreadsheet with an email you have in your `json_key['client_email']`. Otherwise you’ll get a `SpreadsheetNotFound` exception when trying to open it.
 
 2. Paste obtained data to `config.py` file.
 
-3. Install requirements.
+3. Install requirements with `python3.5`.
 ```
 pip install -r requirements.txt
 ```

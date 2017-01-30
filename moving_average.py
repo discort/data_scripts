@@ -42,11 +42,11 @@ def parse_args(args):
 
 def open_spreadsheet(key, credentials=None):
     """
-    Open spreadsheet specified by key
+    Open Google Spreadsheet specified by key
 
     Args:
         key:str - A key of a spreadsheet as it appears in a URL in a browser.
-        credentials:`oath2client.OAuth2Credentials` - client credentials
+        credentials:`oath2client.OAuth2Credentials` - client credentials obj
 
     Returns:
         `gspread.Spreadsheet` instance.
@@ -63,11 +63,10 @@ def open_spreadsheet(key, credentials=None):
 
 def process_spreadsheet(spreadsheet):
     """
-    Args:
-        spreadsheet:`gspread.Spreadsheet` instance - For working with spreadsheet object
+    Process each worksheet of the spreadsheet
 
-    Returns:
-        None
+    spreadsheet:`gspread.Spreadsheet` instance - For working with spreadsheet object
+
     """
     for worksheet in spreadsheet.worksheets():
         process_worksheet(worksheet)
@@ -80,9 +79,6 @@ def process_worksheet(sheet):
 
     Args:
         sheet: `gspread.Worksheet` - The class for worksheet object
-
-    Returns:
-        None
     """
     records = sheet.get_all_records(head=HEADER_ROW_NUMBER)
     moving_average = calculate_moving_average(records, sheet.title)
@@ -91,7 +87,7 @@ def process_worksheet(sheet):
     for cell, mean in zip(cells_range, moving_average):
         cell.value = mean
 
-    # Update in batch
+    # Update in a batch
     sheet.update_cells(cells_range)
 
 
